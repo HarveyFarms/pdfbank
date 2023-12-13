@@ -1,0 +1,2 @@
+def main():
+    x = int(input('Enter number to check if prime: '))
