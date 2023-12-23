@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Tying it into the framework</title><link href="epub.css" rel="stylesheet" type="text/css"/><meta content="DocBook XSL Stylesheets V1.75.2" name="generator"/>
+<meta name="Adept.resource" value="urn:uuid:db9d31f0-c605-45e5-bd7f-8555ec3e9527"/></head><body id="page"><div class="section" title="Tying it into the framework"><div class="titlepage"><div><div><h1 class="title"><a id="ch02lvl1sec17"/>Tying it into the framework</h1></div></div></div><p>We have covered a lot on the subject of drawing images with SDL but we have yet to tie everything together into our framework so that it becomes reusable throughout our game. What we will now cover is creating a texture manager class that will have all of the functions we need to easily load and draw textures.</p><div class="section" title="Creating the texture manager"><div class="titlepage"><div><div><h2 class="title"><a id="ch02lvl2sec21"/>Creating the texture manager</h2></div></div></div><p>The texture manager <a class="indexterm" id="id142"/>will have functions that allow us to load and create an <code class="literal">SDL_Texture</code> structure from an image file, draw the texture (either static or animated), and also hold a list of <code class="literal">SDL_Texture*</code>, so that we can use them whenever we need to. Let's go<a class="indexterm" id="id143"/> ahead and create the <code class="literal">TextureManager.h</code> file:</p><div class="orderedlist"><ol class="orderedlist arabic"><li class="listitem">First we declare our <code class="literal">load</code> function. As parameters, the function takes the filename of the image we want to use, the ID we want to use to refer to the texture, and the renderer we want to use.<div class="informalexample"><pre class="programlisting">bool load(std::string fileName,std::string id, SDL_Renderer* pRenderer);</pre></div></li><li class="listitem">We will create two draw functions, <code class="literal">draw</code> and <code class="literal">drawFrame</code>. They will both take the ID of the texture we want to draw, the <code class="literal">x</code> and <code class="literal">y</code> position we want to draw to, the height and width of the frame or the image we are using, the renderer we will copy to, and an <code class="literal">SDL_RendererFlip</code> value to describe how we want the image to be displayed (default is <code class="literal">SDL_FLIP_NONE</code>). The <code class="literal">drawFrame</code> function will take two additional parameters, the current frame we want to draw and which row it is on in the sprite sheet.<div class="informalexample"><pre class="programlisting">// draw
+void draw(std::string id, int x, int y, int width, int height, SDL_Renderer* pRenderer, SDL_RendererFlip flip = SDL_FLIP_NONE);
+
+// drawframe
+
+void drawFrame(std::string id, int x, int y, int width, int height, int currentRow, int currentFrame, SDL_Renderer* pRenderer, SDL_RendererFlip flip = SDL_FLIP_NONE);</pre></div></li><li class="listitem">The <code class="literal">TextureManager</code> class<a class="indexterm" id="id144"/> will also contain <code class="literal">std::map</code> of pointers to the <code class="literal">SDL_Texture</code> objects, keyed using <code class="literal">std::strings</code>.<div class="informalexample"><pre class="programlisting">std::map&lt;std::string, SDL_Texture*&gt; m_textureMap;</pre></div></li><li class="listitem">We now must define these functions in a <code class="literal">TextureManager.cpp</code> file. Let's start with the <code class="literal">load</code> function. We will take the code from our previous texture loading and use it within this <code class="literal">load</code> method.<div class="informalexample"><pre class="programlisting">bool TextureManager::load(std::string fileName, std::string id, SDL_Renderer* pRenderer)
+{
+  SDL_Surface* pTempSurface = IMG_Load(fileName.c_str());
+
+  if(pTempSurface == 0)
+  {
+    return false;
+  }
+
+  SDL_Texture* pTexture = 
+  SDL_CreateTextureFromSurface(pRenderer, pTempSurface);
+
+  SDL_FreeSurface(pTempSurface);
+
+  // everything went ok, add the texture to our list
+  if(pTexture != 0)
+  {
+    m_textureMap[id] = pTexture;
+    return true;
+  }
+
+  // reaching here means something went wrong
+  return false;
+}</pre></div></li><li class="listitem">When we<a class="indexterm" id="id145"/> call this function we will then have <code class="literal">SDL_Texture</code> that can be used by accessing it from the map using its ID; we will use this in our <code class="literal">draw</code> functions. The<a class="indexterm" id="id146"/> <code class="literal">draw</code> function can be defined as follows:<div class="informalexample"><pre class="programlisting">void TextureManager::draw(std::string id, int x, int y, int width, int height, SDL_Renderer* pRenderer, SDL_RendererFlip flip)
+{
+  SDL_Rect srcRect;
+  SDL_Rect destRect;
+
+  srcRect.x = 0;
+  srcRect.y = 0;
+  srcRect.w = destRect.w = width;
+  srcRect.h = destRect.h = height;
+  destRect.x = x;
+  destRect.y = y;
+
+  SDL_RenderCopyEx(pRenderer, m_textureMap[id], &amp;srcRect, 
+  &amp;destRect, 0, 0, flip);
+}</pre></div></li><li class="listitem">We again use <code class="literal">SDL_RenderCopyEx</code> using the passed in ID variable to get the <code class="literal">SDL_Texture</code> <a class="indexterm" id="id147"/>object we want to draw. We also build our source and destination variables using the passed in <code class="literal">x</code>, <code class="literal">y</code>, <code class="literal">width</code>, and <code class="literal">height</code> values. Now we can move onto <code class="literal">drawFrame</code>:<div class="informalexample"><pre class="programlisting">void TextureManager::drawFrame(std::string id, int x, int y, int width, int height, int currentRow, int currentFrame, SDL_Renderer *pRenderer, SDL_RendererFlip flip)
+{
+  SDL_Rect srcRect;
+  SDL_Rect destRect;
+  srcRect.x = width * currentFrame;
+  srcRect.y = height * (currentRow - 1);
+  srcRect.w = destRect.w = width;
+  srcRect.h = destRect.h = height;
+  destRect.x = x;
+  destRect.y = y;
+
+  SDL_RenderCopyEx(pRenderer, m_textureMap[id], &amp;srcRect, 
+  &amp;destRect, 0, 0, flip);
+}</pre></div><p>In this function, we create a source rectangle to use the appropriate frame of the animation using the <code class="literal">currentFrame</code> and <code class="literal">currentRow</code> variables. The source rectangle's <code class="literal">x</code> position for the current frame is the width of the source rectangle multiplied by the <code class="literal">currentFrame</code> value (covered in the <span class="emphasis"><em>Animating a sprite sheet</em></span> section). Its <code class="literal">y</code> value is the height of the rectangle multiplied by <code class="literal">currentRow – 1</code> (it sounds more natural to use the first row, rather than the zeroth row).</p></li><li class="listitem">We now have everything we need to easily load and draw textures throughout our game. Let's go ahead and test it out using the <code class="literal">animated.png</code> image. Open up <code class="literal">Game.h</code>. We will not need our texture member variables or the rectangles anymore, so delete any of the code dealing with them from the <code class="literal">Game.h</code> and <code class="literal">Game.cpp</code> files. We will however create two new member variables.<div class="informalexample"><pre class="programlisting">int m_currentFrame;
+TextureManager m_textureManager;</pre></div></li><li class="listitem">We will use the <code class="literal">m_currentFrame</code> variable to allow us to animate our sprite sheet and <a class="indexterm" id="id148"/>we also need an instance of our new <code class="literal">TextureManager</code> class (ensure you include <code class="literal">TextureManager.h</code>). We can now load a texture in the game's <code class="literal">init</code> function.<div class="informalexample"><pre class="programlisting">m_textureManager.load("assets/animate-alpha.png", "animate", m_pRenderer);</pre></div></li><li class="listitem">We have given this texture an ID of <code class="literal">"animate"</code> which we can use in our <code class="literal">draw</code> functions. We will start by drawing a static image at 0,0 and an animated image at 100,100. Here is the render function:<div class="informalexample"><pre class="programlisting">void Game::render()
+{
+
+  SDL_RenderClear(m_pRenderer);
+
+  m_textureManager.draw("animate", 0,0, 128, 82, 
+  m_pRenderer);
+
+  m_textureManager.drawFrame("animate", 100,100, 128, 82, 
+  1, m_currentFrame, m_pRenderer);
+
+  SDL_RenderPresent(m_pRenderer);
+
+}</pre></div></li><li class="listitem">The drawFrame function uses our <code class="literal">m_currentFrame</code> member variable. We can increment this in the <a class="indexterm" id="id149"/><code class="literal">update</code> function like we did before, but we now do the calculation of the source rectangle inside the <code class="literal">draw</code> function.<div class="informalexample"><pre class="programlisting">void Game::update()
+{
+  m_currentFrame = int(((SDL_GetTicks() / 100) % 6));
+}</pre></div><p>Now we can build and see our hard work in action.</p></li></ol></div><div class="mediaobject"><img alt="Creating the texture manager" src="graphics/6821OT_02_18.jpg"/></div></div><div class="section" title="Using texture manager as a singleton"><div class="titlepage"><div><div><h2 class="title"><a id="ch02lvl2sec22"/>Using texture manager as a singleton</h2></div></div></div><p>Now that we have our texture manager in place we still have one problem. We want to reuse this <code class="literal">TextureManager</code> throughout our game so we don't want it to be a member of our <code class="literal">Game</code> class because<a class="indexterm" id="id150"/> then we would have to pass it into our draw function. A good option for us is to implement <code class="literal">TextureManager</code> as a singleton. A singleton is a class that can only have one instance. This works for us, as we want to reuse the same <code class="literal">TextureManager</code> throughout our game. We can make our <code class="literal">TextureManager</code> a singleton by first making its constructor private.</p><div class="informalexample"><pre class="programlisting">private:
+
+TextureManager() {}</pre></div><p>This is to ensure that it cannot be created like other objects. It can only be created and accessed using the <a class="indexterm" id="id151"/>
+<code class="literal">Instance</code> function, which we will declare and define.</p><div class="informalexample"><pre class="programlisting">static TextureManager* Instance()
+{
+  if(s_pInstance == 0)
+  {
+    s_pInstance = new TextureManager();
+    return s_pInstance;
+  }
+
+  return s_pInstance;
+}</pre></div><p>This function checks whether we already have an instance of our <code class="literal">TextureManager</code>. If not, then it constructs it,<a class="indexterm" id="id152"/> otherwise it simply returns the static instance. We will also <code class="literal">typedef</code> the <code class="literal">TextureManager</code>.</p><div class="informalexample"><pre class="programlisting">typedef TextureManager TheTextureManager;</pre></div><p>We must also define the static instance in <code class="literal">TextureManager.cpp</code>.</p><div class="informalexample"><pre class="programlisting">TextureManager* TextureManager::s_pInstance = 0;</pre></div><p>We can now use our <code class="literal">TextureManager</code> as a singleton. We no longer have to have an instance of <code class="literal">TextureManager</code> in our<a class="indexterm" id="id153"/> <code class="literal">Game</code> class, we just include the header and use it as follows:</p><div class="informalexample"><pre class="programlisting">// to load
+if(!TheTextureManager::Instance()-&gt;load("assets/animate-alpha.png", "animate", m_pRenderer))
+{
+   return false;
+}
+// to draw
+TheTextureManager::Instance()-&gt;draw("animate", 0,0, 128, 82, m_pRenderer);</pre></div><p>When we load a texture in our <code class="literal">Game</code> (or any other) class we can then access it throughout our code.</p></div></div></body></html>

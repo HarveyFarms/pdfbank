@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Handling bullets</title><link href="epub.css" rel="stylesheet" type="text/css"/><meta content="DocBook XSL Stylesheets V1.75.2" name="generator"/>
+<meta name="Adept.resource" value="urn:uuid:db9d31f0-c605-45e5-bd7f-8555ec3e9527"/></head><body id="page"><div class="section" title="Handling bullets"><div class="titlepage"><div><div><h1 class="title"><a id="ch08lvl1sec44"/>Handling bullets</h1></div></div></div><p>Most objects in the game fire bullets and they all pretty much need to be checked for collisions against<a class="indexterm" id="id491"/> bullets as well; the bottom line—bullets are important in Alien Attack. The game <a class="indexterm" id="id492"/>has a dedicated <code class="literal">BulletHandler</code> class that handles the creation, destruction, updating, and rendering of bullets.</p><div class="section" title="Two types of bullets"><div class="titlepage"><div><div><h2 class="title"><a id="ch08lvl2sec63"/>Two types of bullets</h2></div></div></div><p>There are two types of bullets in the game, <code class="literal">PlayerBullet</code> and <code class="literal">EnemyBullet</code>, both of which are handled in the same <a class="indexterm" id="id493"/>
+<code class="literal">BulletManager</code> class. Both of the bullet classes are declared and defined in <code class="literal">Bullet.h</code>:</p><div class="informalexample"><pre class="programlisting">class PlayerBullet : public ShooterObject
+{
+public:
+
+  PlayerBullet() : ShooterObject()
+  {
+  }
+
+  virtual ~PlayerBullet() {}
+
+  virtual std::string type() { return "PlayerBullet"; }
+
+  virtual void load(std::unique_ptr&lt;LoaderParams&gt; pParams, Vector2D 
+  heading)
+  {
+    ShooterObject::load(std::move(pParams));
+    m_heading = heading;
+  }
+
+  virtual void draw()
+  {
+    ShooterObject::draw();
+  }
+
+  virtual void collision()
+  {
+    m_bDead = true;
+  }
+
+  virtual void update()
+  {
+    m_velocity.setX(m_heading.getX());
+    m_velocity.setY(m_heading.getY());
+
+    ShooterObject::update();
+  }
+
+  virtual void clean()
+  {
+    ShooterObject::clean();
+  }
+
+private:
+
+  Vector2D m_heading;
+};
+
+// Enemy Bullet is just a Player Bullet with a different typename
+class EnemyBullet : public PlayerBullet
+{
+public:
+
+  EnemyBullet() : PlayerBullet()
+  {
+  }
+
+  virtual ~EnemyBullet() {}
+
+  virtual std::string type() { return "EnemyBullet"; }
+};</pre></div><p>Bullets are very simple, they just<a class="indexterm" id="id494"/> move in one direction and at a certain speed.</p></div><div class="section" title="The BulletHandler class"><div class="titlepage"><div><div><h2 class="title"><a id="ch08lvl2sec64"/>The BulletHandler class</h2></div></div></div><p>The <code class="literal">BulletHandler</code> class uses two public functions to add bullets:</p><div class="informalexample"><pre class="programlisting">void addPlayerBullet(int x, int y, int width, int height, std::string textureID, int numFrames, Vector2D heading);
+void addEnemyBullet(int x, int y, int width, int height, std::string textureID, int numFrames, Vector2D heading);</pre></div><p>The <a class="indexterm" id="id495"/>
+<code class="literal">BulletHandler</code> class<a class="indexterm" id="id496"/> is also a singleton. So, if an object wants to add a bullet to the game, it can do so using one of the above functions. Here is an example from the <code class="literal">ShotGlider</code> class:</p><div class="informalexample"><pre class="programlisting">TheBulletHandler::Instance()-&gt;addEnemyBullet(m_position.getX(), m_position.getY() + 15, 16, 16, "bullet2", 1, Vector2D(-10, 0));</pre></div><p>This will add a bullet at the current location of <code class="literal">ShotGlider</code>, with a heading vector of <span class="emphasis"><em>V</em></span>(-10,0).</p><p>Both <code class="literal">add</code> functions are very similar; they create a new instance of <code class="literal">PlayerBullet</code> or <code class="literal">EnemyBullet</code> and then push it into the correct vector. Here are their definitions:</p><div class="informalexample"><pre class="programlisting">void BulletHandler::addPlayerBullet(int x, int y, int width, int 
+  height, std::string textureID, int numFrames, Vector2D heading)
+{
+  PlayerBullet* pPlayerBullet = newPlayerBullet();
+  pPlayerBullet-&gt;load(std::unique_ptr&lt;LoaderParams&gt;(new 
+  LoaderParams(x, y, width, height, textureID, numFrames)), 
+  heading);
+
+  m_playerBullets.push_back(pPlayerBullet);
+}
+
+void BulletHandler::addEnemyBullet(int x, int y, int width, int 
+height, std::string textureID, int numFrames, Vector2D heading)
+{
+  EnemyBullet* pEnemyBullet = new EnemyBullet();
+  pEnemyBullet-&gt;load(std::unique_ptr&lt;LoaderParams&gt;(new 
+  LoaderParams(x, y, width, height, textureID, numFrames)), 
+  heading);
+
+  m_enemyBullets.push_back(pEnemyBullet);
+}</pre></div><p>A big advantage of having a separate place to store bullets like this, rather than have objects themselves manage their own bullets, is that there is no need to pass objects around just to get their bullets to check collisions against. This <code class="literal">BulletHandler</code> class gives us a centralized location that we can then easily pass to the collision handler.</p><p>The <code class="literal">update</code>
+<a class="indexterm" id="id497"/> and <a class="indexterm" id="id498"/>
+<code class="literal">draw</code> functions<a class="indexterm" id="id499"/> are essentially just loops that call each bullet's respective functions, however the <code class="literal">update</code> function will also destroy any bullets that have gone off the screen:</p><div class="informalexample"><pre class="programlisting">for (std::vector&lt;PlayerBullet*&gt;::iterator p_it = 
+m_playerBullets.begin(); p_it != m_playerBullets.end();)
+{
+  if((*p_it)-&gt;getPosition().getX() &lt; 0 || (*p_it)
+  -&gt;getPosition().getX() &gt;TheGame::Instance()-&gt;getGameWidth()
+  || (*p_it)-&gt;getPosition().getY() &lt; 0 || (*p_it)-&gt;
+  getPosition().getY() &gt;TheGame::Instance()-&gt;getGameHeight() || 
+  (*p_it)-&gt;dead())// if off screen or dead
+  {
+    delete * p_it; // delete the bullet
+    p_it = m_playerBullets.erase(p_it); //remove
+  }
+  else// continue to update and loop
+  {
+    (*p_it)-&gt;update();
+    ++p_it;
+  }
+}</pre></div></div></div></body></html>

@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Implementing finite state machines</title><link href="epub.css" rel="stylesheet" type="text/css"/><meta content="DocBook XSL Stylesheets V1.75.2" name="generator"/>
+<meta name="Adept.resource" value="urn:uuid:db9d31f0-c605-45e5-bd7f-8555ec3e9527"/></head><body id="page"><div class="section" title="Implementing finite state machines"><div class="titlepage"><div><div><h1 class="title"><a id="ch05lvl1sec26"/>Implementing finite state machines</h1></div></div></div><p>What we really need is the ability to define our states outside the <code class="literal">game</code> class, and have the state itself take care of what<a class="indexterm" id="id279"/> it needs to load, render, and update. For this we can create what is known as an FSM. The definition of FSM, as we will use it, is a machine that can exist in a finite number of states,<a class="indexterm" id="id280"/> can exist in only one state at a time (known as the current state), and can change from one state to another (known as a transition).</p><div class="section" title="A base class for game states"><div class="titlepage"><div><div><h2 class="title"><a id="ch05lvl2sec40"/>A base class for game states</h2></div></div></div><p>Let's start our implementation by creating a base <a class="indexterm" id="id281"/>class for all of our states; create a header file called <a class="indexterm" id="id282"/>
+<code class="literal">GameState.h</code>:</p><div class="informalexample"><pre class="programlisting">#include&lt;string&gt;
+class GameState
+{
+public:
+  virtual void update() = 0;
+  virtual void render() = 0;
+
+  virtual bool onEnter() = 0;
+  virtual bool onExit() = 0;
+
+  virtual std::string getStateID() const = 0;
+};</pre></div><p>Just like our <code class="literal">GameObject</code> class, this is an abstract base class; we aren't actually putting any functionality into it, we just want all of our derived classes to follow this blueprint. The <code class="literal">update</code> and <code class="literal">render</code> functions are self-explanatory, as they will function just like the functions we created in the <code class="literal">Game</code> class. We can think of the <code class="literal">onEnter</code> and <code class="literal">onExit</code> functions as similar to other <code class="literal">load</code> and <code class="literal">clean</code> functions; we call the <code class="literal">onEnter</code> function as soon as a state is created and <code class="literal">onExit</code> once it is removed. The last function is a getter for the state ID; each state will need to define this function and return its own <code class="literal">staticconst</code> ID. The ID is used to ensure that states don't get repeated. There should be no need to change to the same state, so we check this using the state ID.</p><p>That's it for our <code class="literal">GameState</code> base class; we can now create some test states that derive from this class. We will start<a class="indexterm" id="id283"/> with a state called <code class="literal">MenuState</code>. Go ahead and create <code class="literal">MenuState.h</code> and <code class="literal">MenuState.cpp</code> in our project, open up <code class="literal">MenuState.h</code>, and start coding:</p><div class="informalexample"><pre class="programlisting">#include"GameState.h"
+
+class MenuState : public GameState
+{
+public:
+
+  virtual void update();
+  virtual void render();
+
+  virtual bool onEnter();
+  virtual bool onExit();
+
+  virtual std::string getStateID() const { return s_menuID; }
+
+private:
+
+  static const std::string s_menuID;
+};</pre></div><p>We can now define these methods in our <code class="literal">MenuState.cpp</code> file<a class="indexterm" id="id284"/>. We will just display some text in the console window for now while we test our implementation; we will give this state an ID of <code class="literal">"MENU"</code>:</p><div class="informalexample"><pre class="programlisting">#include "MenuState.h"
+
+const std::string MenuState::s_menuID = "MENU";
+
+void MenuState::update()
+{
+  // nothing for now
+}
+
+void MenuState::render()
+{
+  // nothing for now
+}
+
+bool MenuState::onEnter()
+{
+  std::cout &lt;&lt; "entering MenuState\n";
+  return true;
+}
+
+bool MenuState::onExit()
+{
+  std::cout &lt;&lt; "exiting MenuState\n";
+  return true;
+}</pre></div><p>We will now create<a class="indexterm" id="id285"/> another state called <code class="literal">PlayState</code>, create <code class="literal">PlayState.h</code> and <code class="literal">PlayState.cpp</code> in our project, and declare our methods in the header file:</p><div class="informalexample"><pre class="programlisting">#include "GameState.h"
+
+class PlayState : public GameState
+{
+public:
+
+  virtual void update();
+  virtual void render();
+
+  virtual bool onEnter();
+  virtual bool onExit();
+
+  virtual std::string getStateID() const { return s_playID; }
+
+private:
+
+  static const std::string s_playID;
+};</pre></div><p>This header file is the same as <code class="literal">MenuState.h</code> with the only difference being <code class="literal">getStateID</code> returning this class' specific ID (<code class="literal">"PLAY"</code>). Let's define our functions:</p><div class="informalexample"><pre class="programlisting">#include "PlayState.h"
+
+const std::string PlayState::s_playID = "PLAY";
+
+void PlayState::update()
+{
+  // nothing for now
+}
+
+void PlayState::render()
+{
+  // nothing for now
+}
+
+bool PlayState::onEnter()
+{
+  std::cout &lt;&lt; "entering PlayState\n";
+  return true;
+}
+
+bool PlayState::onExit()
+{
+  std::cout &lt;&lt; "exiting PlayState\n";
+  return true;
+}</pre></div><p>We now have two states<a class="indexterm" id="id286"/> ready for testing; we must next create our FSM so that we can handle them.</p></div><div class="section" title="Implementing FSM"><div class="titlepage"><div><div><h2 class="title"><a id="ch05lvl2sec41"/>Implementing FSM</h2></div></div></div><p>Our FSM is going to need to handle our states<a class="indexterm" id="id287"/> in a number of ways, which include:</p><div class="itemizedlist"><ul class="itemizedlist"><li class="listitem" style="list-style-type: disc"><span class="strong"><strong>Removing one state and adding another</strong></span>: We will use this way to completely change states without leaving the option to return</li><li class="listitem" style="list-style-type: disc"><span class="strong"><strong>Adding one state without removing the previous state</strong></span>: This way is useful for pause menus and so on</li><li class="listitem" style="list-style-type: disc"><span class="strong"><strong>Removing one state without adding another</strong></span>: This way will be used to remove pause states or any other state that had been pushed on top of another one</li></ul></div><p>Now that we have come up with the behavior we want our FSM to have, let's start creating the class. Create the <code class="literal">GameStateMachine.h</code> and <code class="literal">GameStateMachine.cpp</code> files in our project. We will start by declaring our functions in the header file:</p><div class="informalexample"><pre class="programlisting">#include "GameState.h"
+
+class GameStateMachine
+{
+public:
+
+  void pushState(GameState* pState);
+  void changeState(GameState* pState);
+  void popState();
+};</pre></div><p>We have declared the three functions we need. The <code class="literal">pushState</code> function will add a state without removing the previous <a class="indexterm" id="id288"/>state, the <code class="literal">changeState</code> function will remove the previous state before adding another, and finally, the <code class="literal">popState</code> function will remove whichever state is currently being used without adding another. We will need a place to store these states; we will use a vector:</p><div class="informalexample"><pre class="programlisting">private:
+
+std::vector&lt;GameState*&gt; m_gameStates;</pre></div><p>In the <code class="literal">GameStateMachine.cpp</code> file, we can define these functions and then go through them step-by-step:</p><div class="informalexample"><pre class="programlisting">void GameStateMachine::pushState(GameState *pState)
+{
+  m_gameStates.push_back(pState);
+  m_gameStates.back()-&gt;onEnter();
+}</pre></div><p>This is a very straightforward function; we simply push the passed-in <code class="literal">pState</code> parameter<a class="indexterm" id="id289"/> into the <code class="literal">m_gameStates</code> array and then call its <code class="literal">onEnter</code> function<a class="indexterm" id="id290"/>:</p><div class="informalexample"><pre class="programlisting">void GameStateMachine::popState()
+{
+  if(!m_gameStates.empty())
+  {
+    if(m_gameStates.back()-&gt;onExit())
+    {
+      delete m_gamestates.back();
+      m_gameStates.pop_back();
+    }
+  }
+}</pre></div><p>Another simple function is <code class="literal">popState</code>. We first check if there are actually any states available to remove, and if so, we call the <code class="literal">onExit</code> function<a class="indexterm" id="id291"/> of the current state and then remove it:</p><div class="informalexample"><pre class="programlisting">void GameStateMachine::changeState(GameState *pState)
+{
+  if(!m_gameStates.empty())
+  {
+    if(m_gameStates.back()-&gt;getStateID() == pState-&gt;getStateID())
+    {
+      return; // do nothing
+    }
+
+    if(m_gameStates.back()-&gt;onExit())
+    {
+      delete m_gamestates.back();
+      m_gameStates.pop_back();
+    }
+  }
+
+  // push back our new state
+  m_gameStates.push_back(pState);
+
+  // initialise it
+  m_gameStates.back()-&gt;onEnter();
+}</pre></div><p>Our third function is a little more complicated. First, we must check if there are already any states in the array, and if there are, <a class="indexterm" id="id292"/>we check whether their state ID is the same as the current one, and if it is, then we do nothing. If the state IDs do not match, then we remove the current state, add our new <code class="literal">pState</code>, and call its <code class="literal">onEnter</code> function. Next, we will add new <code class="literal">GameStateMachine</code> as a member of the <code class="literal">Game</code> class:</p><div class="informalexample"><pre class="programlisting">GameStateMachine* m_pGameStateMachine;</pre></div><p>We can then use the <code class="literal">Game::init</code> function<a class="indexterm" id="id293"/> to create our state machine and add our first state:</p><div class="informalexample"><pre class="programlisting">m_pGameStateMachine = new GameStateMachine();
+m_pGameStateMachine-&gt;changeState(new MenuState());</pre></div><p>The <code class="literal">Game::handleEvents</code> function<a class="indexterm" id="id294"/> will allow us to move between our states for now:</p><div class="informalexample"><pre class="programlisting">void Game::handleEvents()
+{
+  TheInputHandler::Instance()-&gt;update();
+
+  if(TheInputHandler::Instance()-&gt;isKeyDown(SDL_SCANCODE_RETURN))
+  {
+    m_pGameStateMachine-&gt;changeState(new PlayState());
+  }
+}</pre></div><p>When we press the <span class="emphasis"><em>Enter</em></span> key<a class="indexterm" id="id295"/>, the<a class="indexterm" id="id296"/> state will change. Test the project and you should get the following output after changing states:</p><div class="informalexample"><pre class="programlisting">entering MenuState
+exiting MenuState
+entering PlayState</pre></div><p>We now have the beginnings of our FSM and can next add <code class="literal">update</code> and <code class="literal">render</code> functions to our <code class="literal">GameStateMachine</code> header file:</p><div class="informalexample"><pre class="programlisting">void update();
+void render();</pre></div><p>We can define them in our <code class="literal">GameStateMachine.cpp</code> file:</p><div class="informalexample"><pre class="programlisting">void GameStateMachine::update()
+{
+  if(!m_gameStates.empty())
+  {
+    m_gameStates.back()-&gt;update();
+  }
+}
+
+void GameStateMachine::render()
+{
+  if(!m_gameStates.empty())
+  {
+    m_gameStates.back()-&gt;render();
+  }
+}</pre></div><p>These functions simply check if there are any states, and if so, they update and render the current state. You will notice that we use <code class="literal">back()</code> to get the current state; this is because we have designed our FSM to always use the state at the back of the array. We use <code class="literal">push_back()</code> when adding new states so that they get pushed to the back of the array and used immediately. Our <code class="literal">Game</code> class will now<a class="indexterm" id="id297"/> use the FSM functions in place of its own <code class="literal">update</code> and <code class="literal">render</code> functions:</p><div class="informalexample"><pre class="programlisting">void Game::render()
+{
+  SDL_RenderClear(m_pRenderer); 
+
+  m_pGameStateMachine-&gt;render();
+
+  SDL_RenderPresent(m_pRenderer); 
+}
+
+void Game::update()
+{
+  m_pGameStateMachine-&gt;update();
+}</pre></div><p>Our FSM is now in place.</p></div></div></body></html>

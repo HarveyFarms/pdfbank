@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter 8. Creating Alien Attack</title><link href="epub.css" rel="stylesheet" type="text/css"/><meta content="DocBook XSL Stylesheets V1.75.2" name="generator"/>
+<meta name="Adept.resource" value="urn:uuid:db9d31f0-c605-45e5-bd7f-8555ec3e9527"/></head><body id="page"><div class="chapter" title="Chapter 8. Creating Alien Attack"><div class="titlepage"><div><div><h1 class="title"><a id="ch08"/>Chapter 8. Creating Alien Attack</h1></div></div></div><p>The framework has come on in leaps and bounds and we are almost ready to make our first game. We are going to create a simple 2D sidescrolling shooter in the vein of the classic '80's and '90's shooter games such as R-Type or Pulstar. However, the game will not be set in space. Aliens<a class="indexterm" id="id462"/> have attacked earth and only you and your weaponized helicopter can stop them. One level of fast-paced action is available in the source code downloads and this chapter will cover the steps taken to create it. Here is a screenshot of the game we will be creating:</p><div class="mediaobject"><img alt="Creating Alien Attack" src="graphics/6821OT_08_01.jpg"/></div><p>And another slightly more hectic shot:</p><div class="mediaobject"><img alt="Creating Alien Attack" src="graphics/6821OT_08_02.jpg"/></div><p>There <a class="indexterm" id="id463"/>are still a few things that the framework must handle before we can create this game. These <a class="indexterm" id="id464"/>additions include:</p><div class="itemizedlist"><ul class="itemizedlist"><li class="listitem" style="list-style-type: disc">Sound</li><li class="listitem" style="list-style-type: disc">Collision detection</li></ul></div><p>By the end of the chapter you will have a good understanding of how this game was built using the framework and you will have the ability to continue and improve it. In this chapter, we will cover:</p><div class="itemizedlist"><ul class="itemizedlist"><li class="listitem" style="list-style-type: disc">Implementing sound</li><li class="listitem" style="list-style-type: disc">Creating game-specific object classes</li><li class="listitem" style="list-style-type: disc">Shooting and detecting bullets</li><li class="listitem" style="list-style-type: disc">Creating different enemy types</li><li class="listitem" style="list-style-type: disc">Developing a game</li></ul></div><div class="section" title="Using the SDL_mixer extension for sound"><div class="titlepage"><div><div><h1 class="title"><a id="ch08lvl1sec42"/>Using the SDL_mixer extension for sound</h1></div></div></div><p>The <a class="indexterm" id="id465"/>SDL_mixer extension has its own Mercurial repository that can be used to grab the latest source for the extension. It is located at <a class="ulink" href="http://hg.libsdl.org/SDL_mixer">http://hg.libsdl.org/SDL_mixer</a>. The TortoiseHg application can again be used to <a class="indexterm" id="id466"/>clone the extension's Mercurial repository. Follow these steps to build the library:</p><div class="orderedlist"><ol class="orderedlist arabic"><li class="listitem">Open up TortoiseHg and press <span class="emphasis"><em>CTRL</em></span>+<span class="emphasis"><em>SHIFT</em></span>+<span class="emphasis"><em>N</em></span> to start cloning a new repository.</li><li class="listitem">Type <a class="ulink" href="http://hg.libsdl.org/SDL_mixer">http://hg.libsdl.org/SDL_mixer</a> into the source box.</li><li class="listitem">The <span class="strong"><strong>Destination</strong></span> will be <code class="literal">C:\SDL2_mixer</code>.</li><li class="listitem">Hit <span class="strong"><strong>Clone</strong></span> and wait for completion.</li><li class="listitem">Navigate to <code class="literal">C:\SDL2_mixer\VisualC\</code> and open <code class="literal">SDL_mixer.vcproj</code> in Visual Studio 2010.</li><li class="listitem">As long as the x64 folder outlined in <a class="link" href="ch02.html" title="Chapter 2. Drawing in SDL">Chapter 2</a>, <span class="emphasis"><em>Drawing in SDL</em></span> was created, the project will convert with no issues.</li><li class="listitem">We are going to build the library without MP3 support as we are not going to need it, and also it does not work particularly well with SDL 2.0.</li><li class="listitem">Add <code class="literal">MP3_MUSIC_DISABLED</code> to the <span class="strong"><strong>Preprocessor Definitions</strong></span> in the project properties, which can be found by navigating to <span class="strong"><strong>C/C++</strong></span> | <span class="strong"><strong>Preprocessor</strong></span>, and build as per the <code class="literal">SDL_image</code> instructions in <a class="link" href="ch02.html" title="Chapter 2. Drawing in SDL">Chapter 2</a>, <span class="emphasis"><em>Drawing in SDL</em></span>.</li></ol></div><div class="section" title="Creating the SoundManager class"><div class="titlepage"><div><div><h2 class="title"><a id="ch08lvl2sec57"/>Creating the SoundManager class</h2></div></div></div><p>The game created<a class="indexterm" id="id467"/> in this chapter will not need any advanced sound manipulation, meaning the <code class="literal">SoundManager</code> class is quite basic. The class has only been tested using the <code class="literal">.ogg</code> files for music and the <code class="literal">.wav</code> files for sound effects. Here is the header file:</p><div class="informalexample"><pre class="programlisting">enum sound_type
+{
+  SOUND_MUSIC = 0,
+  SOUND_SFX = 1
+};
+
+class SoundManager
+{
+public:
+
+  static SoundManager* Instance()
+  {
+    if(s_pInstance == 0)
+    {
+      s_pInstance = newSoundManager();
+      return s_pInstance;
+    }
+    return s_pInstance;
+  }
+
+  bool load(std::string fileName, std::string id, sound_type type);
+
+  void playSound(std::string id, int loop);
+  void playMusic(std::string id, int loop);
+
+  private:
+
+  static SoundManager* s_pInstance;
+
+  std::map&lt;std::string, Mix_Chunk*&gt; m_sfxs;
+  std::map&lt;std::string, Mix_Music*&gt; m_music;
+
+  SoundManager();
+  ~SoundManager();
+
+  SoundManager(const SoundManager&amp;);
+  SoundManager &amp;operator=(const SoundManager&amp;);
+};
+
+typedef SoundManager TheSoundManager;</pre></div><p>The <code class="literal">SoundManager</code> class is a singleton; this makes sense because there should only be one place <a class="indexterm" id="id468"/>that the sounds are stored and it should be accessible from anywhere in the game. Before sound can be used, <code class="literal">Mix_OpenAudio</code> must be called to set up the audio for the game. <code class="literal">Mix_OpenAudio</code> takes the following parameters:</p><div class="informalexample"><pre class="programlisting">(int frequency, Uint16 format, int channels, int chunksize)</pre></div><p>This is done<a class="indexterm" id="id469"/> in the <code class="literal">SoundManager</code>'s constructor with values that will work well for most games.</p><div class="informalexample"><pre class="programlisting">SoundManager::SoundManager()
+{
+  Mix_OpenAudio(22050, AUDIO_S16, 2, 4096);
+}</pre></div><p>The <code class="literal">SoundManager</code> class stores sounds in two different <code class="literal">std::map </code>containers:</p><div class="informalexample"><pre class="programlisting">std::map&lt;std::string, Mix_Chunk*&gt; m_sfxs;
+std::map&lt;std::string, Mix_Music*&gt; m_music;</pre></div><p>These maps store pointers to one of two different types used by <code class="literal">SDL_mixer</code> (<code class="literal">Mix_Chunk*</code> and <code class="literal">Mix_Music*</code>), keyed using strings. The <code class="literal">Mix_Chunk*</code> types are used for sound effects and the <code class="literal">Mix_Music*</code> types are of course used for music. When loading a music file or a sound effect into <code class="literal">SoundManager</code>, we pass in the type of sound we are loading as an <code class="literal">enum</code> called <code class="literal">sound_type</code>.</p><div class="informalexample"><pre class="programlisting">bool load(std::string fileName, std::string id, sound_type type);</pre></div><p>This type is then used to decide which <code class="literal">std::map</code> to add the loaded sound to and also which <code class="literal">load</code> function to use from <code class="literal">SDL_mixer</code>. The<a class="indexterm" id="id470"/> <code class="literal">load</code> function is defined in <code class="literal">SoundManager.cpp</code>.</p><div class="informalexample"><pre class="programlisting">bool SoundManager::load(std::string fileName, std::string id, sound_type type)
+{
+  if(type == SOUND_MUSIC)
+  {
+    Mix_Music* pMusic = Mix_LoadMUS(fileName.c_str());
+
+    if(pMusic == 0)
+    {
+      std::cout &lt;&lt; "Could not load music: ERROR - "
+      &lt;&lt; Mix_GetError() &lt;&lt; std::endl;
+      return false;
+    }
+
+    m_music[id] = pMusic;
+    return true;
+  }
+  else if(type == SOUND_SFX)
+  {
+    Mix_Chunk* pChunk = Mix_LoadWAV(fileName.c_str());
+    if(pChunk == 0)
+    {
+      std::cout &lt;&lt; "Could not load SFX: ERROR - "
+      &lt;&lt; Mix_GetError() &lt;&lt; std::endl;
+
+      return false;
+    }
+
+    m_sfxs[id] = pChunk;
+    return true;
+  }
+  return false;
+}</pre></div><p>Once a sound<a class="indexterm" id="id471"/> has been loaded it can be played using the <a class="indexterm" id="id472"/>
+<span class="strong"><strong>playSound</strong></span> or <span class="strong"><strong>playMusic</strong></span> functions:</p><div class="informalexample"><pre class="programlisting">void playSound(std::string id, int loop);
+void playMusic(std::string id, int loop);</pre></div><p>Both of these functions take the ID of the sound to be played and the amount of times that it is to be looped. Both functions are very similar.</p><div class="informalexample"><pre class="programlisting">void SoundManager::playMusic(std::string id, int loop)
+{
+  Mix_PlayMusic(m_music[id], loop);
+}
+
+void SoundManager::playSound(std::string id, int loop)
+{
+  Mix_PlayChannel(-1, m_sfxs[id], loop);
+}</pre></div><p>One difference between <code class="literal">Mix_PlayMusic</code> and <code class="literal">Mix_PlayChannel</code> is that the latter takes an <code class="literal">int</code> as the first parameter; this is the channel that the sound is to be played on. A value of <span class="strong"><strong>-1</strong></span> (as seen in the preceding code) tells <code class="literal">SDL_mixer</code> to play the sound on any available channel.</p><p>Finally, when the <a class="indexterm" id="id473"/>
+<code class="literal">SoundManager</code> class is destroyed, it will call <code class="literal">Mix_CloseAudio</code>:</p><div class="informalexample"><pre class="programlisting">SoundManager::~SoundManager()
+{
+  Mix_CloseAudio();
+}</pre></div><p>And that's it for the <code class="literal">SoundManager</code> class.</p></div></div></div></body></html>

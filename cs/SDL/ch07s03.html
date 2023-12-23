@@ -1,0 +1,379 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Parsing and drawing a tile map</title><link href="epub.css" rel="stylesheet" type="text/css"/><meta content="DocBook XSL Stylesheets V1.75.2" name="generator"/>
+<meta name="Adept.resource" value="urn:uuid:db9d31f0-c605-45e5-bd7f-8555ec3e9527"/></head><body id="page"><div class="section" title="Parsing and drawing a tile map"><div class="titlepage"><div><div><h1 class="title"><a id="ch07lvl1sec38"/>Parsing and drawing a tile map</h1></div></div></div><p>Now that we are relatively familiar with creating tile maps in the Tiled application we will move on to parsing them and <a class="indexterm" id="id406"/>drawing them in our game. We are going to create quite a<a class="indexterm" id="id407"/> few new classes starting with a class called <code class="literal">Level</code> that will hold our tilesets and also draw and update our separate layers. Let's go ahead and create <code class="literal">Level.h</code> in our project and add the following code:</p><div class="informalexample"><pre class="programlisting">class Level {
+  public:
+
+  Level();
+  ~Level() {}
+
+  void update();
+  void render();
+};</pre></div><p>We will also define a <code class="literal">struct</code> at the top of this file called <code class="literal">Tileset</code>:</p><div class="informalexample"><pre class="programlisting">struct Tileset
+{
+  int firstGridID;
+  int tileWidth;
+  int tileHeight;
+  int spacing;
+  int margin;
+  int width;
+  int height;
+  int numColumns;
+  std::string name;
+};</pre></div><p>This <code class="literal">struct</code> holds <a class="indexterm" id="id408"/>any information we need to know about our tilesets. Our <code class="literal">Level</code> <a class="indexterm" id="id409"/>class will now also hold a vector of <code class="literal">Tileset</code> objects:</p><div class="informalexample"><pre class="programlisting">private:
+
+  std::vector&lt;Tileset&gt; m_tilesets;</pre></div><p>Next we will create a public getter function that returns a pointer to this <code class="literal">Tileset</code> vector:</p><div class="informalexample"><pre class="programlisting">std::vector&lt;Tileset&gt;* getTilesets() 
+{ 
+    return &amp;m_tilesets;  
+}</pre></div><p>We will pass this into our parser when we come to load the map.</p><p>The next class we will create is an abstract base class called <code class="literal">Layer</code>. All of our layer types will derive from this class. Create <code class="literal">Layer.h</code> and add the following code:</p><div class="informalexample"><pre class="programlisting">class Layer
+{
+  public:
+
+  virtual void render() = 0;
+  virtual void update() = 0;
+
+  protected:
+
+  virtual ~Layer() {}
+};</pre></div><p>Now that we <a class="indexterm" id="id410"/>have the <code class="literal">Layer</code> class we will store a vector of the <code class="literal">Layer*</code> objects in the <code class="literal">Level</code> class. Back in <code class="literal">Level.h</code> add our vector:</p><div class="informalexample"><pre class="programlisting">std::vector&lt;Layer*&gt; m_layers;</pre></div><p>And a getter function:</p><div class="informalexample"><pre class="programlisting">std::vector&lt;Layer*&gt;* getLayers() 
+{ 
+    return &amp;m_layers; 
+}</pre></div><p>Now we have a basic <a class="indexterm" id="id411"/>
+<code class="literal">Level</code> class in place; its purpose is to store, draw, and update our layers. We will define the functions for <code class="literal">Level</code> in a <code class="literal">Level.cpp</code> file:</p><div class="informalexample"><pre class="programlisting">void Level::render()
+{
+  for(int i = 0; i &lt; m _layers.size(); i++)
+  {
+    m_layers[i]-&gt;render();
+  }
+}
+void Level::update()
+{
+  for(int i = 0; i &lt; m_layers.size(); i++)
+  {
+    m_layers[i]-&gt;update();
+  }
+}</pre></div><div class="section" title="Creating the TileLayer class"><div class="titlepage"><div><div><h2 class="title"><a id="ch07lvl2sec51"/>Creating the TileLayer class</h2></div></div></div><p>Our first layer type is <a class="indexterm" id="id412"/>going to be a <code class="literal">TileLayer</code>. This type of layer is made up entirely of tiles and does not contain anything else. We have already created a layer like this in the Tiled application. Create <code class="literal">TileLayer.h</code> and we can start to write up this class:</p><div class="informalexample"><pre class="programlisting">class TileLayer : public Layer
+{
+  public:
+
+    TileLayer(int tileSize, const std::vector&lt;Tileset&gt; &amp;tilesets);
+
+    virtual void update();
+    virtual void render();
+
+    void setTileIDs(const std::vector&lt;std::vector&lt;int&gt;&gt;&amp; data)  
+    {  
+        m_tileIDs = data;  
+    }
+
+    void setTileSize(int tileSize)  
+    {  
+        m_tileSize = tileSize;  
+    }
+
+    Tileset getTilesetByID(int tileID);
+
+  private:
+
+    int m_numColumns;
+    int m_numRows;
+    int m_tileSize;
+
+    Vector2D m_position;
+    Vector2D m_velocity;
+
+    const std::vector&lt;Tileset&gt; &amp;m_tilesets;
+
+    std::vector&lt;std::vector&lt;int&gt;&gt; m_tileIDs;
+};</pre></div><p>There is nothing too complicated about this class; it holds data for our tile layer. The <code class="literal">Vector2D</code> variables are used when we start to scroll our maps. We will not define this class' functions properly<a class="indexterm" id="id413"/> right now, but you will need to create empty definitions along with defining the vector constants in a <code class="literal">TileLayer.cpp</code> file.</p></div><div class="section" title="Creating the LevelParser class"><div class="titlepage"><div><div><h2 class="title"><a id="ch07lvl2sec52"/>Creating the LevelParser class</h2></div></div></div><p>Now that we have the basic <a class="indexterm" id="id414"/>level and layer classes in place, <a class="indexterm" id="id415"/>we can move onto creating a parser for our <code class="literal">.tmx</code> files and creating levels from them. Create <code class="literal">LevelParser.h</code>:</p><div class="informalexample"><pre class="programlisting">Class LevelParser
+{
+  public:
+
+    Level* parseLevel(const char* levelFile);
+
+  private:
+
+    void parseTilesets(TiXmlElement* pTilesetRoot,std::vector&lt;Tileset&gt;* pTilesets);
+
+    void parseTileLayer(TiXmlElement* pTileElement,std::vector&lt;Layer*&gt; *pLayers, const std::vector&lt;Tileset&gt;*pTilesets);
+
+    int m_tileSize;
+    int m_width;
+    int m_height;
+};</pre></div><p>The <code class="literal">parseLevel</code> function<a class="indexterm" id="id416"/> is what <a class="indexterm" id="id417"/>we will call whenever we want to create a level. To ensure that this function must be used to create a <code class="literal">Level</code> object, we will make the <code class="literal">Level</code> class' constructor <a class="indexterm" id="id418"/>private and make it a friend class of <code class="literal">LevelParser</code>:</p><div class="informalexample"><pre class="programlisting">private:
+
+  friend class LevelParser;
+  Level();</pre></div><p>Now <code class="literal">LevelParser</code> has access to the private constructor of <code class="literal">Level</code> and can return new instances. We can now define the <code class="literal">parseLevel</code> function and then go through it step-by-step. Create <code class="literal">LevelParser.cpp</code> and define the <a class="indexterm" id="id419"/>
+<code class="literal">parseLevel</code> function as follows:</p><div class="informalexample"><pre class="programlisting">Level* LevelParser::parseLevel(const char *levelFile)
+{
+    // create a TinyXML document and load the map XML
+    TiXmlDocument levelDocument;
+    levelDocument.LoadFile(levelFile);
+
+    // create the level object
+    Level* pLevel = new Level();
+
+    // get the root node 
+    TiXmlElement* pRoot = levelDocument.RootElement();
+
+    pRoot-&gt;Attribute("tilewidth", &amp;m_tileSize);
+    pRoot-&gt;Attribute("width", &amp;m_width);
+    pRoot-&gt;Attribute("height", &amp;m_height);
+
+    // parse the tilesets
+    for(TiXmlElement* e = pRoot-&gt;FirstChildElement(); e != NULL; e = e-&gt;NextSiblingElement())
+    {
+      if(e-&gt;Value() == std::string("tileset"))
+      {
+         parseTilesets(e, pLevel-&gt;getTilesets());
+      }
+    }
+
+    // parse any object layers
+    for(TiXmlElement* e = pRoot-&gt;FirstChildElement(); e != NULL; e = e-&gt;NextSiblingElement())
+    {
+      if(e-&gt;Value() == std::string("layer"))
+      {
+        parseTileLayer(e, pLevel-&gt;getLayers(), pLevel-&gt;getTilesets());
+      }
+    }
+
+    return pLevel;
+}</pre></div><p>We covered XML<a class="indexterm" id="id420"/> files and TinyXML in the previous chapter<a class="indexterm" id="id421"/> so I won't go into detail again here. The first part of the function grabs the root node:</p><div class="informalexample"><pre class="programlisting">// get the root node 
+TiXmlElement* pRoot = levelDocument.RootElement();</pre></div><p>We can see from the map file that this node has several attributes:</p><div class="informalexample"><pre class="programlisting">&lt;map version="1.0" orientation="orthogonal" width="60" height="15" tilewidth="32" tileheight="32"&gt;</pre></div><p>We grab these values using the <code class="literal">Attribute</code> function from TinyXML and set the member variables of <code class="literal">LevelParser</code>:</p><div class="informalexample"><pre class="programlisting">pRoot-&gt;Attribute("tilewidth", &amp;m_tileSize);
+pRoot-&gt;Attribute("width", &amp;m_width);
+pRoot-&gt;Attribute("height", &amp;m_height);</pre></div><p>Next we must check for any tileset nodes and parse them, using the <code class="literal">getTilesets</code> function of our<a class="indexterm" id="id422"/> newly created <code class="literal">Level</code> instance to pass in the <code class="literal">Tileset</code> vector:</p><div class="informalexample"><pre class="programlisting">// parse the tilesets
+for(TiXmlElement* e = pRoot-&gt;FirstChildElement(); e != NULL; e = e-&gt;NextSiblingElement())
+{
+  if(e-&gt;Value() == std::string("tileset"))
+  {
+    parseTilesets(e, pLevel-&gt;getTilesets());
+  }
+}</pre></div><p>Finally we can check for<a class="indexterm" id="id423"/> any tile layers and then parse them, again using the getter functions from our <code class="literal">pLevel</code> object, which we then return:</p><div class="informalexample"><pre class="programlisting">// parse any object layers
+for(TiXmlElement* e = pRoot-&gt;FirstChildElement(); e != NULL; e = e-&gt;NextSiblingElement())
+{
+  if(e-&gt;Value() == std::string("layer"))
+  {
+    parseTileLayer(e, pLevel-&gt;getLayers(), pLevel-&gt;getTilesets());
+  }
+}
+
+return pLevel;
+}</pre></div><p>You can see that this function is very similar to our <code class="literal">parseState</code> function from the previous chapter. Now we must define the <code class="literal">parseTilesets</code> and <code class="literal">parseTileLayer</code> functions.</p></div><div class="section" title="Parsing tilesets"><div class="titlepage"><div><div><h2 class="title"><a id="ch07lvl2sec53"/>Parsing tilesets</h2></div></div></div><p>Parsing tilesets <a class="indexterm" id="id424"/>is actually<a class="indexterm" id="id425"/> quite simple due to our <code class="literal">TextureManager</code> class:</p><div class="informalexample"><pre class="programlisting">void LevelParser::parseTilesets(TiXmlElement* pTilesetRoot, std::vector&lt;Tileset&gt;* pTilesets)
+{
+  // first add the tileset to texture manager
+    TheTextureManager::Instance()-&gt;load(pTilesetRoot-&gt;FirstChildElement()-&gt;Attribute("source"), pTilesetRoot-&gt;Attribute("name"), TheGame::Instance()-&gt;getRenderer());
+
+  // create a tileset object
+  Tileset tileset;
+  pTilesetRoot-&gt;FirstChildElement()-&gt;Attribute("width", &amp;tileset.width);
+  pTilesetRoot-&gt;FirstChildElement()-&gt;Attribute("height", &amp;tileset.height);
+  pTilesetRoot-&gt;Attribute("firstgid", &amp;tileset.firstGridID);
+  pTilesetRoot-&gt;Attribute("tilewidth", &amp;tileset.tileWidth);
+  pTilesetRoot-&gt;Attribute("tileheight", &amp;tileset.tileHeight);
+  pTilesetRoot-&gt;Attribute("spacing", &amp;tileset.spacing);
+  pTilesetRoot-&gt;Attribute("margin", &amp;tileset.margin);
+  tileset.name = pTilesetRoot-&gt;Attribute("name");
+
+  tileset.numColumns = tileset.width / (tileset.tileWidth + tileset.spacing);
+
+  pTilesets-&gt;push_back(tileset);
+}</pre></div><p>We add the tileset<a class="indexterm" id="id426"/> to the <code class="literal">TextureManager</code> class using its attributes <a class="indexterm" id="id427"/>and then create a <code class="literal">Tileset</code> object and push it into the <code class="literal">pTilesets</code> array. The <code class="literal">pTilesets</code> array is actually a pointer to the array from our <code class="literal">pLevel</code> object which we previously created in the <code class="literal">parseLevel</code> function. Here is our first tileset so that you can look at it alongside the preceding function:</p><div class="informalexample"><pre class="programlisting">&lt;tileset firstgid="1" name="blocks1" tilewidth="32" tileheight="32"spacing="2" margin="2"&gt;
+  &lt;image source="blocks1.png" width="614" height="376"/&gt;
+&lt;/tileset&gt;</pre></div></div><div class="section" title="Parsing a tile layer"><div class="titlepage"><div><div><h2 class="title"><a id="ch07lvl2sec54"/>Parsing a tile layer</h2></div></div></div><p>Due to the compression and<a class="indexterm" id="id428"/> encoding of our tile IDs, this function is <a class="indexterm" id="id429"/>actually quite complicated. We are going to make use of a few different libraries that will help us to decode and decompress our data, the first of which is a<a class="indexterm" id="id430"/> <span class="strong"><strong>Base64</strong></span> decoder. We will be using a decoder created by René Nyffenegger, available from the source code downloads and also from <a class="ulink" href="https://github.com/ReneNyffenegger/development_misc/tree/master/base64">https://github.com/ReneNyffenegger/development_misc/tree/master/base64</a>. The <code class="literal">base64.h</code> and <code class="literal">base64.cpp</code> files can be added directly to the project.</p><p>The second library we will need is the <code class="literal">zlib</code> library, a compiled version is available at <a class="ulink" href="http://www.zlib.net">http://www.zlib.net</a> and can be easily added to your project like any other library. Once these libraries are<a class="indexterm" id="id431"/> available to the project we can start parsing our tiles:</p><div class="informalexample"><pre class="programlisting">void LevelParser::parseTileLayer(TiXmlElement* pTileElement, std::vector&lt;Layer*&gt; *pLayers, const std::vector&lt;Tileset&gt;* pTilesets)
+{
+  TileLayer* pTileLayer = new TileLayer(m_tileSize, *pTilesets);
+
+    // tile data
+  std::vector&lt;std::vector&lt;int&gt;&gt; data;
+
+  std::string decodedIDs;
+  TiXmlElement* pDataNode;
+
+  for(TiXmlElement* e = pTileElement-&gt;FirstChildElement(); e != NULL; e = e-&gt;NextSiblingElement())
+  {
+    if(e-&gt;Value() == std::string("data"))
+    {
+      pDataNode = e;
+    }
+  }
+
+  for(TiXmlNode* e = pDataNode-&gt;FirstChild(); e != NULL; e = e-&gt;NextSibling())
+  {
+    TiXmlText* text = e-&gt;ToText();
+    std::string t = text-&gt;Value();
+    decodedIDs = base64_decode(t);
+  }
+
+    // uncompress zlib compression
+  uLongf numGids = m_width * m_height * sizeof(int);
+  std::vector&lt;unsigned&gt; gids(numGids);
+  uncompress((Bytef*)&amp;gids[0], &amp;numGids,(const Bytef*)decodedIDs.c_str(), decodedIDs.size());
+
+  std::vector&lt;int&gt; layerRow(m_width);
+
+  for(int j = 0; j &lt; m_height; j++)
+  {
+    data.push_back(layerRow);
+  }
+
+  for(int rows = 0; rows &lt; m_height; rows++)
+  {
+    for(int cols = 0; cols &lt; m_width; cols++)
+    {
+      data[rows][cols] = gids[rows * m_width + cols];
+    }
+  }
+
+  pTileLayer-&gt;setTileIDs(data);
+
+  pLayers-&gt;push_back(pTileLayer);
+}</pre></div><p>Let's go through this function step-by-step. First we create a new <code class="literal">TileLayer</code> instance:</p><div class="informalexample"><pre class="programlisting">TileLayer* pTileLayer = new TileLayer(m_tileSize, *pTilesets);</pre></div><p>Next we declare<a class="indexterm" id="id432"/> some needed variables; a multidimensional array of <code class="literal">int</code> values to hold our final decoded and uncompressed tile data, a <code class="literal">std::string</code> that will be our base64 decoded information and <a class="indexterm" id="id433"/>finally a place to store our XML node once we find it:</p><div class="informalexample"><pre class="programlisting">// tiledata
+std::vector&lt;std::vector&lt;int&gt;&gt; data;
+
+std::string decodedIDs;
+TiXmlElement* pDataNode;</pre></div><p>We can search for the node we need in the same way we have previously done:</p><div class="informalexample"><pre class="programlisting">for(TiXmlElement* e = pTileElement-&gt;FirstChildElement(); e != NULL; e = e-&gt;NextSiblingElement())
+{
+    if(e-&gt;Value() == std::string("data"))
+    {
+      pDataNode = e;
+    }
+}</pre></div><p>Once we have found the correct node we can then get the text from within it (our encoded/compressed data) and use the base64 decoder to decode it:</p><div class="informalexample"><pre class="programlisting">for(TiXmlNode* e = pDataNode-&gt;FirstChild(); e != NULL; e = e-&gt;NextSibling())
+{
+  TiXmlText* text = e-&gt;ToText();
+  std::string t = text-&gt;Value();
+  decodedIDs = base64_decode(t);
+}</pre></div><p>Our <code class="literal">decodedIDs</code> <a class="indexterm" id="id434"/>variable is now a <code class="literal">base64</code> decoded <code class="literal">string</code>. The next step is to use the <code class="literal">zlib</code> library to decompress our data, this is done using the <code class="literal">uncompress</code> function:</p><div class="informalexample"><pre class="programlisting">// uncompress zlib compression
+uLongf sizeofids = m_width * m_height * sizeof(int);
+
+std::vector&lt;int&gt; ids(m_width * m_height);
+
+uncompress((Bytef*)&amp;ids[0], &amp;sizeofids,(const Bytef*)decodedIDs.c_str(), decodedIDs.size());</pre></div><p>The<a class="indexterm" id="id435"/> <code class="literal">uncompress</code> function <a class="indexterm" id="id436"/>takes an array of <code class="literal">Bytef*</code> (defined in zlib's <code class="literal">zconf.h</code>) as the destination buffer; we are using an <code class="literal">std::vector</code> of <code class="literal">int</code> values and casting it to a <code class="literal">Bytef*</code> array. The second parameter is the total size of the destination buffer, in our case we are using a <code class="literal">vector</code> of <code class="literal">int</code> values making the total size the number of rows x the number of columns x the size of an <code class="literal">int</code>; or <code class="literal">m_width * m_height * sizeof(int)</code>. We then pass in our decoded string and its size as the final two parameters. Our <code class="literal">ids</code> vector now contains all of our tile IDs and the function moves on to set the size of our data vector for us to fill with our tile IDs:</p><div class="informalexample"><pre class="programlisting">std::vector&lt;int&gt; layerRow(m_width);
+for(int j = 0; j &lt; m_height; j++)
+{
+  data.push_back(layerRow);
+}</pre></div><p>We can now fill our data array with the correct values:</p><div class="informalexample"><pre class="programlisting">for(int rows = 0; rows &lt; m_height; rows++)
+{
+  for(int cols = 0; cols &lt; m_width; cols++)
+  {
+    data[rows][cols] = ids[rows * m_width + cols];
+  }
+}</pre></div><p>And finally we set <a class="indexterm" id="id437"/>this layer's tile data and then push the layer into the layers array of our <code class="literal">Level</code>.</p><p>We must now define the functions in our <code class="literal">Level.cpp</code> file.</p></div><div class="section" title="Drawing the map"><div class="titlepage"><div><div><h2 class="title"><a id="ch07lvl2sec55"/>Drawing the map</h2></div></div></div><p>We are finally at a stage where <a class="indexterm" id="id438"/>we can start drawing our tiles to the screen. Inside the earlier created <code class="literal">TileLayer.cpp</code> file we will now need to define our functions for the layer. Starting with the constructor:</p><div class="informalexample"><pre class="programlisting">TileLayer::TileLayer(int tileSize, const std::vector&lt;Tileset&gt; &amp;tilesets) : m_tileSize(tileSize), m_tilesets(tilesets), m_position(0,0), m_velocity(0,0)
+{
+  m_numColumns = (TheGame::Instance()-&gt;getGameWidth() / m_tileSize);
+  m_numRows = (TheGame::Instance()-&gt;getGameHeight() / m_tileSize);
+}</pre></div><p>The new <a class="indexterm" id="id439"/>
+<code class="literal">Game::getGameWidth</code> and <code class="literal">Game::getGameHeight</code> functions<a class="indexterm" id="id440"/> are just simple getter functions that return variables set in the <code class="literal">Game::init</code> function:</p><div class="informalexample"><pre class="programlisting">int getGameWidth() const  
+{  
+  return m_gameWidth;  
+}
+int getGameHeight() const  
+{  
+  return m_gameHeight;  
+}</pre></div><p>The <a class="indexterm" id="id441"/>
+<code class="literal">TileLayer</code> <code class="literal">update</code> function uses <code class="literal">velocity</code> to set the map's position; we will cover this in more detail when we come to scroll our map:</p><div class="informalexample"><pre class="programlisting">void TileLayer::update()
+{
+  m_position += m_velocity;
+}</pre></div><p>The <code class="literal">render</code> function is where all the magic happens:</p><div class="informalexample"><pre class="programlisting">void TileLayer::render()
+{
+  int x, y, x2, y2 = 0;
+
+  x = m_position.getX() / m_tileSize;
+  y = m_position.getY() / m_tileSize;
+
+  x2 = int(m_position.getX()) % m_tileSize;
+  y2 = int(m_position.getY()) % m_tileSize;
+
+  for(int i = 0; i &lt; m_numRows; i++)
+  {
+    for(int j = 0; j &lt; m_numColumns; j++)
+    {
+        int id = m_tileIDs[i][j + x];
+
+          if(id == 0)
+          {
+            continue;
+          }
+
+        Tileset tileset = getTilesetByID(id);
+
+        id--;
+
+        TheTextureManager::Instance()-&gt;drawTile(tileset.name, 2, 2, (j * m_tileSize) - x2, (i * m_tileSize) - y2, m_tileSize, m_tileSize, (id - (tileset.firstGridID - 1)) / tileset.numColumns, (id - (tileset.firstGridID - 1)) % tileset.numColumns, TheGame::Instance()-&gt;getRenderer());
+    }
+  }
+}</pre></div><p>You will notice that there<a class="indexterm" id="id442"/> is a new function in the <code class="literal">TextureManager</code>, <code class="literal">drawTile</code>. This function is specifically for drawing tiles and includes margin and spacing values. Here it is:</p><div class="informalexample"><pre class="programlisting">void TextureManager::drawTile(std::string id, int margin, int spacing, int x, int y, int width, int height, int currentRow, int currentFrame, SDL_Renderer *pRenderer)
+{
+  SDL_Rect srcRect;
+  SDL_Rect destRect;
+  srcRect.x = margin + (spacing + width) * currentFrame;
+  srcRect.y = margin + (spacing + height) * currentRow;
+  srcRect.w = destRect.w = width;
+  srcRect.h = destRect.h = height;
+  destRect.x = x;
+  destRect.y = y;
+
+  SDL_RenderCopyEx(pRenderer, m_textureMap[id], &amp;srcRect,&amp;destRect, 0, 0, SDL_FLIP_NONE);
+}</pre></div><p>Let's look closer<a class="indexterm" id="id443"/> at the <code class="literal">render</code> function; we will ignore the positioning code for now:</p><div class="informalexample"><pre class="programlisting">for(int i = 0; i &lt; m_numRows; i++)
+{
+  for(int j = 0; j &lt; m_numColumns; j++)
+  {
+    int id = m_tileIDs[i][j + x];
+
+    if(id == 0)
+    {
+      continue;
+    }
+
+    Tilesettileset = getTilesetByID(id);
+
+    id--;
+
+    TheTextureManager::Instance()-&gt;drawTile(tileset.name,tileset.margin, tileset.spacing, (j * m_tileSize) - x2, (i *m_tileSize) - y2, m_tileSize, m_tileSize, (id -(tileset.firstGridID - 1)) / tileset.numColumns, (id -(tileset.firstGridID - 1)) % tileset.numColumns,TheGame::Instance()-&gt;getRenderer());
+  }
+}</pre></div><p>We loop through the number of columns and the number of rows:</p><div class="informalexample"><pre class="programlisting">for(int i = 0; i &lt; m_numRows; i++)
+{
+  for(int j = 0; j &lt; m_numColumns; j++)
+{</pre></div><p>This is not the number of rows and columns in the full tile ID array, it is actually the number of columns and rows needed to fill the size of our game. We do not want to be drawing anything that we do not have to. We obtained these values earlier in the constructor:</p><div class="informalexample"><pre class="programlisting">m_numColumns = (TheGame::Instance()-&gt;getGameWidth() / m_tileSize);
+m_numRows = (TheGame::Instance()-&gt;getGameHeight() / m_tileSize);</pre></div><p>Next we get the current tile ID from the array (ignore the  <code class="literal">+ x</code> for now):</p><div class="informalexample"><pre class="programlisting">int id = m_tileIDs[i + y][j + x];</pre></div><p>We check if the tile ID is 0. If it is, then we do not want to draw anything:</p><div class="informalexample"><pre class="programlisting">if(id == 0)
+{
+  continue;
+}</pre></div><p>Otherwise we grab the correct tileset:</p><div class="informalexample"><pre class="programlisting">Tileset tileset = getTilesetByID(id);</pre></div><p>Getting the tileset uses a very simple function, <code class="literal">getTilesetByID</code>, which compares each tileset's <code class="literal">firstgid</code> value and returns the correct tileset:</p><div class="informalexample"><pre class="programlisting">Tileset TileLayer::getTilesetByID(int tileID)
+{
+  for(int i = 0; i &lt; m_tilesets.size(); i++)
+  {
+    if( i + 1 &lt;= m_tilesets.size() - 1)
+    {
+      if(tileID &gt;= m_tilesets[i].firstGridID&amp;&amp;tileID &lt; m_tilesets[i + 1].firstGridID)
+      {
+        return m_tilesets[i];
+      }
+    }
+    else
+    {
+      return m_tilesets[i];
+    }
+  }
+
+  std::cout &lt;&lt; "did not find tileset, returning empty tileset\n";
+  Tileset t;
+  return t;
+}</pre></div><p>Next we move on to drawing the tiles:</p><div class="informalexample"><pre class="programlisting">id--;
+
+TheTextureManager::Instance()-&gt;drawTile(tileset.name, 
+  tileset.margin, tileset.spacing, (j * m_tileSize) - x2, (i * 
+  m_tileSize) - y2, m_tileSize, m_tileSize, (id - 
+  (tileset.firstGridID - 1)) / tileset.numColumns, (id - 
+  (tileset.firstGridID - 1)) % tileset.numColumns, 
+    TheGame::Instance()-&gt;getRenderer());
+  }
+}</pre></div><p>First we decrement the <a class="indexterm" id="id444"/>ID so that we can draw the correct tile from the tilesheet, even if it is at position <code class="literal">0,0</code>. We then use the <code class="literal">drawTile</code> function to copy across the correct tile using the tileset we grabbed earlier, to set the first parameter of the function, which is the <code class="literal">name</code> of the texture. Again, we can use the tileset for the next two parameters, <code class="literal">margin</code> and <code class="literal">spacing</code>:</p><div class="informalexample"><pre class="programlisting">tileset.margin, tileset.spacing</pre></div><p>The next two parameters set the position we want to draw our tiles at:</p><div class="informalexample"><pre class="programlisting">(j * m_tileSize) - x2, (i * m_tileSize) - y2</pre></div><p>Ignoring the <code class="literal">x2</code> and <code class="literal">y2</code> values for now (they are 0 anyway), we can set the current <code class="literal">x</code> position as the current column multiplied by the width of a tile and the <code class="literal">y</code> value as the current row multiplied by the height of a tile. We then set the width and height of the tile we are copying across:</p><div class="informalexample"><pre class="programlisting">m_tileSize, m_tileSize,</pre></div><p>And finally we work out the location of the tile on the tilesheet:</p><div class="informalexample"><pre class="programlisting">(id - (tileset.firstGridID - 1)) / tileset.numColumns, 
+(id - (tileset.firstGridID - 1)) % tileset.numColumns,</pre></div><p>We subtract the <code class="literal">firstGridID - 1</code> to allow us to treat each tilesheet the same and obtain the correct location. For example, the <code class="literal">firstGridID</code> of a tileset could be 50 and the current tile ID could be 70. We know that this is actually going to be tile 19 (after we decrement the ID) on the tilesheet itself.</p><p>Finally, we must create a level in our <code class="literal">PlayState</code> class:</p><div class="informalexample"><pre class="programlisting">bool PlayState::onEnter()
+{
+  LevelParser levelParser;
+  pLevel = levelParser.parseLevel("assets/map1.tmx");
+
+  std::cout &lt;&lt; "entering PlayState\n";
+  return true;
+}</pre></div><p>Next, draw it in the<a class="indexterm" id="id445"/> <code class="literal">render</code> function, and also do the same with the <code class="literal">update</code> function:</p><div class="informalexample"><pre class="programlisting">void PlayState::render()
+{
+  pLevel-&gt;render();
+}</pre></div><p>We will also have to comment out any functions that use objects (such as <code class="literal">collisionChecks</code>) as we don't have any yet and this will cause a runtime error. Run our game and you<a class="indexterm" id="id446"/> will see our tile map being drawn to the screen.</p></div></div></body></html>

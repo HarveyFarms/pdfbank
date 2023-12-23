@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Loading the menu state from an XML file</title><link href="epub.css" rel="stylesheet" type="text/css"/><meta content="DocBook XSL Stylesheets V1.75.2" name="generator"/>
+<meta name="Adept.resource" value="urn:uuid:db9d31f0-c605-45e5-bd7f-8555ec3e9527"/></head><body id="page"><div class="section" title="Loading the menu state from an XML file"><div class="titlepage"><div><div><h1 class="title"><a id="ch06lvl1sec33"/>Loading the menu state from an XML file</h1></div></div></div><p>We now have most <a class="indexterm" id="id364"/>of our state loading code in place and can make use of this in the <code class="literal">MenuState</code> class. First we must do a little legwork and set up a new way of assigning the callbacks to our <code class="literal">MenuButton</code> objects, since this is not something we <a class="indexterm" id="id365"/>could pass in from an XML file. The approach we will take is to give any object that wants to make use of a callback an attribute named <code class="literal">callbackID</code> in the XML file. Other objects do not need this value and <code class="literal">LoaderParams</code> will use the default value of <code class="literal">0</code>. The <code class="literal">MenuButton</code> class will make use of this value and pull it from its <code class="literal">LoaderParams</code>, like so:</p><div class="informalexample"><pre class="programlisting">void MenuButton::load(const LoaderParams *pParams)
+{
+  SDLGameObject::load(pParams);
+  m_callbackID = pParams-&gt;getCallbackID();
+  m_currentFrame = MOUSE_OUT;
+}</pre></div><p>The <code class="literal">MenuButton</code> class<a class="indexterm" id="id366"/> will also need two other functions, one to set the callback function and another to return its callback ID:</p><div class="informalexample"><pre class="programlisting">void setCallback(void(*callback)()) { m_callback = callback;}
+int getCallbackID() { return m_callbackID; }</pre></div><p>Next we must create a function to set callbacks. Any state that uses objects with callbacks will need an implementation of this function. The most likely states to have callbacks are menu states, so we will rename our <code class="literal">MenuState</code> class to <code class="literal">MainMenuState</code> and make <code class="literal">MenuState</code> an abstract class that extends from <code class="literal">GameState</code>. The class will declare a function that sets<a class="indexterm" id="id367"/> the callbacks for any items that need it and<a class="indexterm" id="id368"/> it will also have a vector of the <code class="literal">Callback</code> objects as a member; this will be used within the <code class="literal">setCallbacks</code> function for each state.</p><div class="informalexample"><pre class="programlisting">class MenuState : public GameState
+{
+  protected:
+
+  typedef void(*Callback)();
+  virtual void setCallbacks(const std::vector&lt;Callback&gt;&amp; callbacks) 
+  = 0;
+
+  std::vector&lt;Callback&gt; m_callbacks;
+};</pre></div><p>The <code class="literal">MainMenuState</code> class <a class="indexterm" id="id369"/>(previously <code class="literal">MenuState</code>) will now derive from this <code class="literal">MenuState</code> class.</p><div class="informalexample"><pre class="programlisting">#include "MenuState.h"
+#include "GameObject.h"
+
+class MainMenuState : public MenuState
+{
+  public:
+
+  virtual void update();
+  virtual void render();
+
+  virtual bool onEnter(); 
+  virtual bool onExit(); 
+
+  virtual std::string getStateID() const { return s_menuID; }
+
+  private:
+
+  virtual void setCallbacks(const std::vector&lt;Callback&gt;&amp; 
+  callbacks);
+
+  // call back functions for menu items
+  static void s_menuToPlay();
+  static void s_exitFromMenu();
+
+  static const std::string s_menuID;
+
+  std::vector&lt;GameObject*&gt; m_gameObjects;
+};</pre></div><p>Because <code class="literal">MainMenuState</code> now<a class="indexterm" id="id370"/> derives from <code class="literal">MenuState</code>, it must of course declare and define the <code class="literal">setCallbacks</code> function. We are now ready to use <a class="indexterm" id="id371"/>our state parsing to load the <code class="literal">MainMenuState</code> class. Our <code class="literal">onEnter</code> function will now look like this:</p><div class="informalexample"><pre class="programlisting">bool MainMenuState::onEnter()
+{
+  // parse the state
+  StateParser stateParser;
+  stateParser.parseState("test.xml", s_menuID, &amp;m_gameObjects, 
+  &amp;m_textureIDList);
+
+  m_callbacks.push_back(0); //pushback 0 callbackID start from 1
+  m_callbacks.push_back(s_menuToPlay);
+  m_callbacks.push_back(s_exitFromMenu);
+
+  // set the callbacks for menu items
+  setCallbacks(m_callbacks);
+
+  std::cout &lt;&lt; "entering MenuState\n";
+  return true;
+}</pre></div><p>We create a state parser and then use it to parse the current state. We push any callbacks into the <code class="literal">m_callbacks</code> array inherited from <code class="literal">MenuState</code>. Now we need to define the <code class="literal">setCallbacks</code> function:</p><div class="informalexample"><pre class="programlisting">void MainMenuState::setCallbacks(const std::vector&lt;Callback&gt;&amp; 
+callbacks)
+{
+  // go through the game objects
+  for(int i = 0; i &lt; m_gameObjects.size(); i++)
+  {
+    // if they are of type MenuButton then assign a callback 
+    based on the id passed in from the file
+    if(dynamic_cast&lt;MenuButton*&gt;(m_gameObjects[i]))
+    {
+      MenuButton* pButton = 
+      dynamic_cast&lt;MenuButton*&gt;(m_gameObjects[i]);
+      pButton-&gt;setCallback(callbacks[pButton-&gt;getCallbackID()]);
+    }
+  }
+}</pre></div><p>We use <code class="literal">dynamic_cast</code> to check whether the object is a <code class="literal">MenuButton</code> type; if it is then we do the actual cast and then use the objects <code class="literal">callbackID</code> as the index into the <code class="literal">callbacks</code> vector and assign the correct function. While this method of assigning callbacks could be seen as not very <a class="indexterm" id="id372"/>extendable and could possibly be better<a class="indexterm" id="id373"/> implemented, it does have a redeeming feature; it allows us to keep our callbacks inside the state they will need to be called from. This means that we won't need a huge header file with all of the callbacks in.</p><p>One last alteration we need is to add a list of texture IDs to each state so that we can clear all of the textures that were loaded for that state. Open up <code class="literal">GameState.h</code> and we will add a <code class="literal">protected</code> variable.</p><div class="informalexample"><pre class="programlisting">protected:
+std::vector&lt;std::string&gt; m_textureIDList;</pre></div><p>We will pass this into the state parser in <code class="literal">onEnter</code> and then we can clear any used textures in the <code class="literal">onExit</code> function of each state, like so:</p><div class="informalexample"><pre class="programlisting">// clear the texture manager
+for(int i = 0; i &lt; m_textureIDList.size(); i++)
+{
+  TheTextureManager::Instance()-&gt;
+  clearFromTextureMap(m_textureIDList[i]);
+}</pre></div><p>Before we start running the game we need to register our <code class="literal">MenuButton</code> type with the <code class="literal">GameObjectFactory</code>. Open up <code class="literal">Game.cpp</code> and in the <code class="literal">Game::init</code> function we can register the type.</p><div class="informalexample"><pre class="programlisting">TheGameObjectFactory::Instance()-&gt;registerType("MenuButton", new MenuButtonCreator());</pre></div><p>We can now run the game and see our fully data-driven <code class="literal">MainMenuState</code>.</p></div></body></html>

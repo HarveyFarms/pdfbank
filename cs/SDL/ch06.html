@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter 6. Data-driven Design</title><link href="epub.css" rel="stylesheet" type="text/css"/><meta content="DocBook XSL Stylesheets V1.75.2" name="generator"/>
+<meta name="Adept.resource" value="urn:uuid:db9d31f0-c605-45e5-bd7f-8555ec3e9527"/></head><body id="page"><div class="chapter" title="Chapter 6. Data-driven Design"><div class="titlepage"><div><div><h1 class="title"><a id="ch06"/>Chapter 6. Data-driven Design</h1></div></div></div><p>With the previous chapter adding the ability to create and handle game states, our framework has really begun to take shape. In this chapter, we will explore a new way to create our states and objects by removing the need to hardcode the creation of our objects at compile time. To do this we will parse through an external file, in our case an XML file, which lists all of the objects needed for our state. This will make our states generic as they can be completely different simply by loading up an alternate XML file. Taking <code class="literal">PlayState</code> as an example, when creating a new level we would need to create a new state with different objects and set up objects we want for that level. If we could instead load the objects from an external file, we could reuse the same <code class="literal">PlayState</code> and simply load the correct file depending on the current level we want. Keeping classes generic like this and loading external data to determine their state is called <span class="strong"><strong>Data-driven Design</strong></span>.<a class="indexterm" id="id332"/></p><p>In this chapter we will cover:</p><div class="itemizedlist"><ul class="itemizedlist"><li class="listitem" style="list-style-type: disc">Loading XML files using the <span class="strong"><strong>TinyXML</strong></span> library</li><li class="listitem" style="list-style-type: disc">Creating a <span class="strong"><strong>Distributed Factory</strong></span></li><li class="listitem" style="list-style-type: disc">Loading objects dynamically using the factory and an XML file</li><li class="listitem" style="list-style-type: disc">Parsing a state from an XML file</li><li class="listitem" style="list-style-type: disc">Fitting everything together into the framework</li></ul></div><div class="section" title="Loading XML files"><div class="titlepage"><div><div><h1 class="title"><a id="ch06lvl1sec29"/>Loading XML files</h1></div></div></div><p>I have chosen to use XML<a class="indexterm" id="id333"/> files because they are so easy to parse. We are not going to write our own XML parser, rather we will use an open source library called TinyXML. TinyXML was written by <span class="emphasis"><em>Lee Thomason</em></span> and is available under the zlib license from <a class="ulink" href="http://sourceforge.net/projects/tinyxml/">http://sourceforge.net/projects/tinyxml/</a>. </p><p>Once downloaded the only setup we need to do is to include a few of the files in our project:</p><div class="itemizedlist"><ul class="itemizedlist"><li class="listitem" style="list-style-type: disc"><code class="literal">tinyxmlerror.cpp</code></li><li class="listitem" style="list-style-type: disc"><code class="literal">tinyxmlparser.cpp</code></li><li class="listitem" style="list-style-type: disc"><code class="literal">tinystr.cpp</code></li><li class="listitem" style="list-style-type: disc"><code class="literal">tinystr.h</code></li><li class="listitem" style="list-style-type: disc"><code class="literal">tinyxml.cpp</code></li><li class="listitem" style="list-style-type: disc"><code class="literal">tinyxml.h</code></li></ul></div><p>Also, at the top of <code class="literal">tinyxml.h</code>, add this line of code:</p><div class="informalexample"><pre class="programlisting">#define TIXML_USE_STL</pre></div><p>By doing<a class="indexterm" id="id334"/> this we ensure that we are using the STL versions of the TinyXML functions. We can now go through a little of how an XML file is structured. It's actually fairly simple and we will only give a brief overview to help you get up to speed with how we will use it.</p><div class="section" title="Basic XML structure"><div class="titlepage"><div><div><h2 class="title"><a id="ch06lvl2sec46"/>Basic XML structure</h2></div></div></div><p>Here is a basic XML file:</p><div class="informalexample"><pre class="programlisting">&lt;?xml version="1.0" ?&gt;
+&lt;ROOT&gt;
+    &lt;ELEMENT&gt;
+    &lt;/ELEMENT&gt;
+&lt;/ROOT&gt;</pre></div><p>The first line<a class="indexterm" id="id335"/> of the file defines the format of the XML file. The second line is our <code class="literal">Root</code> element; everything else is a child of this element. The third line is the first child of the root element. Now let's look at a slightly more complicated XML file:</p><div class="informalexample"><pre class="programlisting">&lt;?xml version="1.0" ?&gt;
+&lt;ROOT&gt;
+    &lt;ELEMENTS&gt;
+        &lt;ELEMENT&gt;Hello,&lt;/ELEMENT&gt;
+        &lt;ELEMENT&gt; World!&lt;/ELEMENT&gt;
+    &lt;/ELEMENTS&gt;
+&lt;/ROOT&gt;</pre></div><p>As you can see we have now added children to the first child element. You can nest as many children as you like. But without a good structure, your XML file may become very hard to read. If we were to parse the above file, here are the steps we would take:</p><div class="orderedlist"><ol class="orderedlist arabic"><li class="listitem">Load the XML file.</li><li class="listitem">Get the root element, <code class="literal">&lt;ROOT&gt;</code>.</li><li class="listitem">Get the first child of the root element, <code class="literal">&lt;ELEMENTS&gt;</code>.</li><li class="listitem">For each child, <code class="literal">&lt;ELEMENT&gt;</code> of <code class="literal">&lt;ELEMENTS&gt;</code>, get the content.</li><li class="listitem">Close the file.</li></ol></div><p>Another useful <a class="indexterm" id="id336"/>XML feature is the use of attributes. Here is an example:</p><div class="informalexample"><pre class="programlisting">&lt;ROOT&gt;
+    &lt;ELEMENTS&gt;
+        &lt;ELEMENT text="Hello,"/&gt;
+        &lt;ELEMENT text=" World!"/&gt;
+    &lt;/ELEMENTS&gt;
+&lt;/ROOT&gt;</pre></div><p>We have now stored the text we want in an attribute named <code class="literal">text</code>. When this file is parsed, we would now grab the <code class="literal">text</code> attribute for each element and store that instead of the content between the <code class="literal">&lt;ELEMENT&gt;&lt;/ELEMENT&gt;</code> tags. This is especially useful for us as we can use attributes to store lots of different values for our objects. So let's look at something closer to what we will use in our game:</p><div class="informalexample"><pre class="programlisting">&lt;?xml version="1.0" ?&gt;
+&lt;STATES&gt;
+
+&lt;!--The Menu State--&gt;
+&lt;MENU&gt;
+&lt;TEXTURES&gt;
+  &lt;texture filename="button.png" ID="playbutton"/&gt;
+  &lt;texture filename="exit.png" ID="exitbutton"/&gt;
+&lt;/TEXTURES&gt;
+
+&lt;OBJECTS&gt;
+  &lt;object type="MenuButton" x="100" y="100" width="400" 
+  height="100" textureID="playbutton"/&gt;
+  &lt;object type="MenuButton" x="100" y="300" width="400" 
+  height="100" textureID="exitbutton"/&gt;
+&lt;/OBJECTS&gt;
+&lt;/MENU&gt;
+
+&lt;!--The Play State--&gt;
+&lt;PLAY&gt;
+&lt;/PLAY&gt;
+
+&lt;!-- The Game Over State --&gt;
+&lt;GAMEOVER&gt;
+&lt;/GAMEOVER&gt;
+&lt;/STATES&gt;</pre></div><p>This is slightly<a class="indexterm" id="id337"/> more complex. We define each state in its own element and within this element we have objects and textures with various attributes. These attributes can be loaded in to create the state.</p><p>With this knowledge of XML you can easily create your own file structures if what we cover within this book is not to your needs.</p></div></div></div></body></html>

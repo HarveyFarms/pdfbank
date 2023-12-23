@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Parsing object layers</title><link href="epub.css" rel="stylesheet" type="text/css"/><meta content="DocBook XSL Stylesheets V1.75.2" name="generator"/>
+<meta name="Adept.resource" value="urn:uuid:db9d31f0-c605-45e5-bd7f-8555ec3e9527"/></head><body id="page"><div class="section" title="Parsing object layers"><div class="titlepage"><div><div><h1 class="title"><a id="ch07lvl1sec40"/>Parsing object layers</h1></div></div></div><p>The final topic <a class="indexterm" id="id450"/>we will cover in this chapter is loading objects from our Tiled map file. This is extremely useful and takes the guesswork out of placing objects within a level. Open up the Tiled application and we can create our first <span class="strong"><strong>Object Layer</strong></span>
+<a class="indexterm" id="id451"/> by clicking <span class="strong"><strong>Layer</strong></span> | <span class="strong"><strong>Add Object Layer</strong></span>. This will create a new layer called <span class="strong"><strong>Object Layer 1</strong></span> as shown in the following screenshot:</p><div class="mediaobject"><img alt="Parsing object layers" src="graphics/6821OT_07_13.jpg"/></div><p>We can create objects and assign any values and properties we want on these layers. First we will create a rectangle. Press <span class="emphasis"><em>R</em></span> and click anywhere on your tile map, you will see a small square appear, as shown in the following screenshot:</p><div class="mediaobject"><img alt="Parsing object layers" src="graphics/6821OT_07_14.jpg"/></div><p>Right-click on<a class="indexterm" id="id452"/> this square and click on <span class="strong"><strong>Object Properties…</strong></span>. This will bring up the object properties dialog as shown in the following screenshot:</p><div class="mediaobject"><img alt="Parsing object layers" src="graphics/6821OT_07_15.jpg"/></div><p>Here, we can set the values we want our object to have, just like our previous state XML files. Go ahead and fill in the dialog box as shown in the preceding screenshot. The positions and sizes of this<a class="indexterm" id="id453"/> dialog box deal in tiles, not pixels, so <code class="literal">x = 1</code> is actually <code class="literal">x = tile width</code> and so on. Saving this map will add our new object layer to the map file:</p><div class="informalexample"><pre class="programlisting">&lt;objectgroup name="Object Layer 1" width="60" height="15"&gt;
+  &lt;object name="Helicopter1" type="Player" x="32" y="32" width="32 height="32"&gt;
+    &lt;properties&gt;
+      &lt;property name="numFrames" value="4"/&gt;
+      &lt;property name="textureHeight" value="55"/&gt;
+      &lt;property name="textureID" value="helicopter"/&gt;
+      &lt;property name="textureWidth" value="128"/&gt;
+    &lt;/properties&gt;
+  &lt;/object&gt;
+&lt;/objectgroup&gt;</pre></div><p>We are also going to use another property list to load in our textures for this map. <span class="strong"><strong>Map</strong></span> | <span class="strong"><strong>Map Properties</strong></span> will bring up the map properties dialog as shown in the following screenshot:</p><div class="mediaobject"><img alt="Parsing object layers" src="graphics/6821OT_07_16.jpg"/></div><p>Here we can add <a class="indexterm" id="id454"/>the textures we need for this map's objects. The saved file will now have an additional property list for us to parse through:</p><div class="informalexample"><pre class="programlisting">&lt;properties&gt;
+  &lt;property name="helicopter" value="helicopter.png"/&gt;
+&lt;/properties&gt;</pre></div><div class="section" title="Developing the ObjectLayer class"><div class="titlepage"><div><div><h2 class="title"><a id="ch07lvl2sec56"/>Developing the ObjectLayer class</h2></div></div></div><p>Back in our project <a class="indexterm" id="id455"/>we will now create a new layer type called <code class="literal">ObjectLayer</code>. Create <code class="literal">ObjectLayer.h</code> and we can add the following code:</p><div class="informalexample"><pre class="programlisting">class ObjectLayer : public Layer
+{
+  public:
+  virtual void update();
+  virtual void render();
+
+  std::vector&lt;GameObject*&gt;* getGameObjects()  
+  {  
+    return &amp;m_gameObjects;  
+  }
+
+  private:
+
+  std::vector&lt;GameObject*&gt; m_gameObjects;
+};</pre></div><p>We will also define these functions in <code class="literal">ObjectLayer.cpp</code>:</p><div class="informalexample"><pre class="programlisting">void ObjectLayer::update()
+{
+  for(int i = 0; i &lt; m_gameObjects.size(); i++)
+  {
+    m_gameObjects[i]-&gt;update();
+  }
+
+}
+void ObjectLayer::render()
+{
+  for(int i = 0; i &lt; m_gameObjects.size(); i++)
+  {
+    m_gameObjects[i]-&gt;draw();
+  }
+}</pre></div><p>Our <code class="literal">ObjectLayer</code> class is very simple. It only needs to draw and update the objects for that layer. Now let's parse <a class="indexterm" id="id456"/>our <code class="literal">ObjectLayer</code>. We will need two new functions in the <code class="literal">LevelParser</code> class:</p><div class="informalexample"><pre class="programlisting">void parseTextures(TiXmlElement* pTextureRoot);
+
+void parseObjectLayer(TiXmlElement* pObjectElement,std::vector&lt;Layer*&gt; *pLayers);</pre></div><p>The <a class="indexterm" id="id457"/>
+<code class="literal">parseLevel</code> function must now include these functions and pass in the correct XML node:</p><div class="informalexample"><pre class="programlisting">// we must parse the textures needed for this level, which have been added to properties
+for(TiXmlElement* e = pProperties-&gt;FirstChildElement(); e != NULL;e = e-&gt;NextSiblingElement())
+{
+  if(e-&gt;Value() == std::string("property"))
+  {
+  parseTextures(e);
+  }
+}</pre></div><p>We will alter the way we were searching for tile layers to also search for object layers:</p><div class="informalexample"><pre class="programlisting">// parse any object layers
+for(TiXmlElement* e = pRoot-&gt;FirstChildElement(); e != NULL; e = e-&gt;NextSiblingElement())
+{
+  if(e-&gt;Value() == std::string("objectgroup") || e-&gt;Value() == std::string("layer"))
+  {
+    if(e-&gt;FirstChildElement()-&gt;Value() == std::string("object"))
+    {
+      parseObjectLayer(e, pLevel-&gt;getLayers());
+    }
+    else if(e-&gt;FirstChildElement()-&gt;Value() == std::string("data"))
+    {
+      parseTileLayer(e, pLevel-&gt;getLayers(), pLevel-&gt;getTilesets());
+    }
+  }
+}</pre></div><p>Now we need to define the new functions; <code class="literal">parseTextures</code> is a very small and simple function:</p><div class="informalexample"><pre class="programlisting">void LevelParser::parseTextures(TiXmlElement* pTextureRoot)
+{
+  TheTextureManager::Instance()-&gt;load(pTextureRoot-&gt;Attribute("value"), pTextureRoot-&gt;Attribute("name"), TheGame::Instance()-&gt;getRenderer());
+}</pre></div><p>It gets the texture <a class="indexterm" id="id458"/>values and adds them to the <code class="literal">TextureManager</code>. The<a class="indexterm" id="id459"/> <code class="literal">parseObjects</code> function is a little longer but not particularly complicated:</p><div class="informalexample"><pre class="programlisting">void LevelParser::parseObjectLayer(TiXmlElement* pObjectElement, std::vector&lt;Layer*&gt; *pLayers)
+{
+    // create an object layer
+  ObjectLayer* pObjectLayer = new ObjectLayer();
+
+  std::cout &lt;&lt; pObjectElement-&gt;FirstChildElement()-&gt;Value();
+
+  for(TiXmlElement* e = pObjectElement-&gt;FirstChildElement(); e != NULL; e = e-&gt;NextSiblingElement())
+    {
+      std::cout &lt;&lt; e-&gt;Value();
+      if(e-&gt;Value() == std::string("object"))
+      {
+        int x, y, width, height, numFrames, callbackID, animSpeed;
+        std::string textureID;
+
+        // get the initial node values type, x and y
+        e-&gt;Attribute("x", &amp;x);
+        e-&gt;Attribute("y", &amp;y);
+        GameObject* pGameObject = TheGameObjectFactory::Instance()-&gt;create(e-&gt;Attribute("type"));
+
+        // get the property values
+        for(TiXmlElement* properties = e-&gt;FirstChildElement(); properties != NULL; properties = properties-&gt;NextSiblingElement())
+        {
+          if(properties-&gt;Value() == std::string("properties"))
+          {
+            for(TiXmlElement* property = properties-&gt;FirstChildElement(); property != NULL; property = property-&gt;NextSiblingElement())
+            {
+              if(property-&gt;Value() == std::string("property"))
+              {
+                if(property-&gt;Attribute("name") == std::string("numFrames"))
+                  {
+                    property-&gt;Attribute("value", &amp;numFrames);
+                  }
+                else if(property-&gt;Attribute("name") == std::string("textureHeight"))
+                {
+                  property-&gt;Attribute("value", &amp;height);
+                }
+                else if(property-&gt;Attribute("name") == std::string("textureID"))
+                {
+                  textureID = property-&gt;Attribute("value");
+                }
+                else if(property-&gt;Attribute("name") == std::string("textureWidth"))
+                {
+                  property-&gt;Attribute("value", &amp;width);
+                }
+                else if(property-&gt;Attribute("name") == std::string("callbackID"))
+                {
+                  property-&gt;Attribute("value", &amp;callbackID);
+                }
+                else if(e-&gt;Attribute("name") == std::string("animSpeed"))
+                {
+                  property-&gt;Attribute("value", &amp;animSpeed);
+                }
+              }
+            }
+          }
+        }
+        pGameObject-&gt;load(newLoaderParams(x, y, width, height, textureID, numFrames, callbackID, animSpeed));
+      pObjectLayer-&gt;getGameObjects()-&gt;push_back(pGameObject);
+    }
+  }
+
+  pLayers-&gt;push_back(pObjectLayer);
+}</pre></div><p>We load the object in a very similar way to the state parser, yet this time we must check for the <code class="literal">name</code> of the<a class="indexterm" id="id460"/> property rather than grabbing the <code class="literal">attribute</code> directly:</p><div class="informalexample"><pre class="programlisting">if(property-&gt;Attribute("name") == std::string("numFrames"))
+{
+  property-&gt;Attribute("value", &amp;numFrames);
+}</pre></div><p>We can then create the object just like the state parser:</p><div class="informalexample"><pre class="programlisting">pGameObject-&gt;load(new LoaderParams(x,y,width,height,textureID,numFrames,callbackID, animSpeed));</pre></div><p>And add it to this layer's game object array:</p><div class="informalexample"><pre class="programlisting">pObjectLayer-&gt;getGameObjects()-&gt;push_back(pGameObject);</pre></div><p>Once we have loaded all of the objects for this layer, we can push it into our <code class="literal">Level</code> layer array:</p><div class="informalexample"><pre class="programlisting">pLayers-&gt;push_back(pObjectLayer);</pre></div><p>Run the game and you<a class="indexterm" id="id461"/> will see our helicopter in the <code class="literal">PlayState</code> again.</p><div class="mediaobject"><img alt="Developing the ObjectLayer class" src="graphics/6821OT_07_17.jpg"/></div></div></div></body></html>
