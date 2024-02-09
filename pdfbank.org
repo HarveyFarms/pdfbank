@@ -1,4 +1,6 @@
-#+TITLE: All pdf banks/resources
+@document.meta
+title: All pdf banks/resources
+@end
 
 [[https://pdfdrive.to][Ultimate free pdf website]]
 
