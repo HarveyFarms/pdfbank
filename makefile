@@ -2,4 +2,4 @@ git:
 	git add -A ; git commit -m "sync" ; git push
 
 p:
-	git fetch
+	git pull
