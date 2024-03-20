@@ -1,7 +1,3 @@
-@document.meta
-title: All pdf banks/resources
-@end
-
 [[https://pdfdrive.to][Ultimate free pdf website]]
 
 [[https://realnotcomplex.com/][free (and legal) math textbooks/videos]]
